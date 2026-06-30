@@ -12,12 +12,12 @@ const TED_URL = "https://api.ted.europa.eu/v3/notices/search";
 
 const RICH_FIELDS = [
   "publication-number", "notice-title", "buyer-name", "buyer-country",
-  "deadline-receipt-tender", "place-of-performance", "classification-cpv",
-  "publication-date", "links", "total-value", "notice-type"
+  "deadline-date-lot", "deadline-receipt-tender-date-lot", "place-of-performance",
+  "classification-cpv", "publication-date", "total-value", "total-value-cur", "notice-type"
 ];
 const MED_FIELDS = [
   "publication-number", "notice-title", "buyer-name", "buyer-country",
-  "deadline-receipt-tender", "classification-cpv", "publication-date", "links"
+  "deadline-date-lot", "classification-cpv", "publication-date"
 ];
 const MIN_FIELDS = ["publication-number"];
 
@@ -65,31 +65,35 @@ function normalize(rawNotices, country, source) {
     seen.add(pub);
 
     let link = "";
-    const rawLinks = n["links"];
-    if (rawLinks && typeof rawLinks === "object") {
-      // try to surface an HTML link if present
-      const html = rawLinks.html || rawLinks.HTML;
-      if (html) link = pick(html, prefer);
-    }
     // Canonical, always-valid official notice page built from the publication number.
     // Documented format: https://ted.europa.eu/{lang}/notice/{publication-number}/{format}
     const canonical = `https://ted.europa.eu/en/notice/${encodeURIComponent(pub)}/html`;
+
+    // Deadline lives in lot-level fields; take the first present and keep only the date part
+    // (TED appends a timezone offset that the browser Date parser dislikes).
+    const rawDeadline = pick(n["deadline-receipt-tender-date-lot"], prefer) ||
+                        pick(n["deadline-date-lot"], prefer) || "";
+    const deadline = (String(rawDeadline).match(/\d{4}-\d{2}-\d{2}/) || [""])[0];
+
+    const value = pick(n["total-value"], prefer) || "";
+    const valueCur = pick(n["total-value-cur"], prefer) || "";
 
     out.push({
       id: pub,
       title: pick(n["notice-title"], prefer) || "(untitled notice)",
       buyer: pick(n["buyer-name"], prefer) || "",
       country: pick(n["buyer-country"], prefer) || country || "",
-      deadline: pick(n["deadline-receipt-tender"], prefer) || "",
+      deadline: deadline,
       cpv: asArray(n["classification-cpv"]).map(x => pick(x, prefer)).filter(Boolean).slice(0, 6),
-      value: pick(n["total-value"], prefer) || "",
+      value: value ? (value + (valueCur ? " " + valueCur : "")) : "",
       noticeType: pick(n["notice-type"], prefer) || "",
       published: pick(n["publication-date"], prefer) || "",
-      link: link || canonical,
+      link: canonical,
       officialLink: canonical,
       matchSource: source || "cpv"   // "cpv" = country+CPV match, "country" = country-only fallback
     });
   }
+  out.sort((a, b) => String(b.published || "").localeCompare(String(a.published || "")));
   return out;
 }
 
@@ -97,10 +101,12 @@ async function tedQuery(query, fields) {
   const body = {
     query,
     fields,
-    limit: "40",
+    page: 1,
+    limit: 40,
     scope: "ACTIVE",            // only notices still open for submission
     checkQuerySyntax: false,
-    paginationMode: "ITERATION"
+    onlyLatestVersions: true,   // skip superseded notice versions
+    paginationMode: "PAGE_NUMBER"  // required so TED returns ALL requested fields, not just the id
   };
   const r = await fetch(TED_URL, {
     method: "POST",
@@ -130,10 +136,22 @@ exports.handler = async (event) => {
   const countryClause = `(buyer-country IN (${country}))`;
   const cpvClause = cpv.length ? `(classification-cpv IN (${cpv.join(" ")}))` : "";
 
-  // Query plan: most specific first, then progressively broader so we always return
-  // something real when the country has open notices.
+  // Recency clause: notices published in the last ~120 days are far more likely to still be
+  // open, and it keeps very old notices (which TED's ACTIVE scope still returns) out of the
+  // results. The v3 expert query uses the long field name with a compact yyyymmdd date.
+  const since = new Date(Date.now() - 120 * 86400000);
+  const pd = `${since.getFullYear()}${String(since.getMonth() + 1).padStart(2, "0")}${String(since.getDate()).padStart(2, "0")}`;
+  const recent = `(publication-date>=${pd})`;
+
+  // Query plan: recent + specific first, then progressively broader. If a recency-filtered
+  // query is rejected or empty, the loop falls through to the same query without the filter,
+  // so a bad date syntax can never break the whole search.
   const queries = [];
-  if (cpvClause) queries.push({ q: `${countryClause} AND ${cpvClause}`, source: "cpv" });
+  if (cpvClause) {
+    queries.push({ q: `${countryClause} AND ${cpvClause} AND ${recent}`, source: "cpv" });
+    queries.push({ q: `${countryClause} AND ${cpvClause}`, source: "cpv" });
+  }
+  queries.push({ q: `${countryClause} AND ${recent}`, source: "country" });
   queries.push({ q: countryClause, source: "country" });
 
   const fieldSets = [RICH_FIELDS, MED_FIELDS, MIN_FIELDS];
