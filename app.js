@@ -338,13 +338,13 @@
   const TABS = [
     ["dashboard", "nav_dashboard"], ["profile", "nav_profile"], ["search", "nav_search"],
     ["pipeline", "nav_pipeline"], ["vault", "nav_vault"], ["readiness", "nav_readiness"],
-    ["searches", "nav_searches"], ["settings", "nav_settings"], ["log", "nav_log"], ["about", "nav_about"]
+    ["searches", "nav_searches"], ["settings", "nav_settings"], ["log", "nav_log"]
   ];
   let CURRENT = "dashboard";
   let DOSSIER_ID = null;
   let DEMO_MODE = false;
 
-  const TAB_SHORT = { manual: "tabm_manual", searches: "tabm_searches", about: "tabm_about" };
+  const TAB_SHORT = { manual: "tabm_manual", searches: "tabm_searches" };
   function tabLabel(id, key) {
     if (window.innerWidth <= 620 && TAB_SHORT[id]) return t(TAB_SHORT[id]);
     return t(key);
@@ -1138,23 +1138,6 @@
     if ($("#log-clear", root)) $("#log-clear", root).addEventListener("click", () => { AGENTLOG.length = 0; go("log"); });
   }
 
-  /* ============================================================ VIEW: about */
-  function renderAbout(root) {
-    const loopLabels = [t("strategy_title"), "TED", t("urg_expired"), t("m_fit"), t("m_win"), t("dos_log"), t("dec_decision"), t("nav_pipeline"), t("mem_title")];
-    root.innerHTML = `<h2 class="vtitle">${esc(t("about_title"))}</h2>
-      <div class="panel">
-        <p>${esc(t("about_p1"))}</p>
-        <p>${esc(t("about_p2"))}</p>
-        <p>${esc(t("about_p3"))}</p>
-      </div>
-      <div class="panel"><div class="sectit">${esc(t("about_title"))}</div>
-        <div class="loop">${loopLabels.map((l, i) => `<div class="loop-step">${esc(l)}</div>${i < loopLabels.length - 1 ? `<div class="loop-arrow">↓</div>` : ""}`).join("")}</div>
-      </div>
-      <div class="panel"><div class="sectit">${esc(t("work_title"))}</div>
-        <ul style="margin:0;padding-left:18px;color:var(--paper-dim);font-size:13.5px">${(t("work_items") || []).map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>
-      ${trustStrip()}`;
-  }
-
   /* ============================================================ win/loss modal (inline) */
   function openWinLoss(tn) {
     DOSSIER_ID = tn.id;
@@ -1229,7 +1212,7 @@
   const RENDER = {
     dashboard: renderDashboard, profile: renderProfile, search: renderSearch, pipeline: renderPipeline,
     dossier: renderDossier, manual: renderManual, vault: renderVault, readiness: renderReadiness,
-    searches: renderSearches, settings: renderSettings, log: renderLog, about: renderAbout
+    searches: renderSearches, settings: renderSettings, log: renderLog
   };
 
   /* ============================================================ language switch + chrome */
