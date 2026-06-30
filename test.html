@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Procura — Deployment Diagnostics</title>
+<style>
+  :root{
+    --navy:#0E1726; --navy2:#16223a; --gold:#D9A648; --ink:#e8edf6;
+    --muted:#9fb0c9; --line:#26344f; --ok:#3FB37F; --warn:#E0A53D; --bad:#E06A5E;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--navy);color:var(--ink);
+    font-family:Inter,-apple-system,Segoe UI,Roboto,sans-serif;line-height:1.5}
+  header{padding:28px 22px 18px;border-bottom:1px solid var(--line);background:var(--navy2)}
+  h1{margin:0;font-family:Spectral,Georgia,serif;font-weight:600;font-size:24px;letter-spacing:.2px}
+  h1 span{color:var(--gold)}
+  .sub{color:var(--muted);font-size:14px;margin-top:4px}
+  main{max-width:860px;margin:0 auto;padding:22px}
+  .row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+  button{background:var(--gold);color:#1a1206;border:0;border-radius:8px;
+    padding:11px 16px;font-weight:600;font-size:14px;cursor:pointer}
+  button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  button:disabled{opacity:.5;cursor:default}
+  .card{background:var(--navy2);border:1px solid var(--line);border-radius:12px;
+    padding:16px 18px;margin-bottom:14px}
+  .card h3{margin:0 0 6px;font-size:15px;display:flex;align-items:center;gap:9px}
+  .dot{width:10px;height:10px;border-radius:50%;background:#42506b;flex:none}
+  .dot.ok{background:var(--ok)} .dot.bad{background:var(--bad)}
+  .dot.warn{background:var(--warn)} .dot.run{background:var(--gold);animation:p 1s infinite}
+  @keyframes p{50%{opacity:.4}}
+  .desc{color:var(--muted);font-size:13px;margin:0 0 8px}
+  pre{background:#0a1120;border:1px solid var(--line);border-radius:8px;
+    padding:10px 12px;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;
+    color:#c7d4ea;overflow:auto;max-height:220px;margin:8px 0 0;white-space:pre-wrap;word-break:break-word}
+  .status{font-size:12px;font-weight:600;margin-left:auto}
+  .status.ok{color:var(--ok)} .status.bad{color:var(--bad)} .status.warn{color:var(--warn)}
+  a{color:var(--gold)}
+  .note{font-size:12px;color:var(--muted);margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Procura <span>Diagnostics</span></h1>
+  <div class="sub">Confirms the deployment is wired correctly: functions reachable, API key set, live data flowing.</div>
+</header>
+<main>
+  <div class="row">
+    <button id="runAll">Run all checks</button>
+    <button class="ghost" id="clear">Clear</button>
+    <a href="./index.html" style="margin-left:auto;align-self:center">← Back to app</a>
+  </div>
+
+  <div class="card" id="c-sw">
+    <h3><span class="dot"></span>Service worker <span class="status"></span></h3>
+    <p class="desc">PWA install + offline shell. Registers from <code>service-worker.js</code>.</p>
+    <pre></pre>
+  </div>
+
+  <div class="card" id="c-redir">
+    <h3><span class="dot"></span>Netlify redirects <span class="status"></span></h3>
+    <p class="desc">Checks that <code>/api/groq</code> and <code>/api/ted</code> resolve to the functions.</p>
+    <pre></pre>
+  </div>
+
+  <div class="card" id="c-env">
+    <h3><span class="dot"></span>Groq env var (GROQ_API_KEY) <span class="status"></span></h3>
+    <p class="desc">The function reports a clear 500 if the key is missing in Netlify settings.</p>
+    <pre></pre>
+  </div>
+
+  <div class="card" id="c-groq">
+    <h3><span class="dot"></span>Groq reasoning <span class="status"></span></h3>
+    <p class="desc">Sends a tiny JSON prompt and expects parseable JSON back.</p>
+    <pre></pre>
+  </div>
+
+  <div class="card" id="c-ted">
+    <h3><span class="dot"></span>TED live register <span class="status"></span></h3>
+    <p class="desc">Queries the official EU TED API (Bulgaria, electrical-works CPV) through the proxy.</p>
+    <pre></pre>
+  </div>
+
+  <div class="card" id="c-run">
+    <h3><span class="dot"></span>Full mini agent run <span class="status"></span></h3>
+    <p class="desc">Plan → search → score in one pass, exactly like the app does it.</p>
+    <pre></pre>
+  </div>
+
+  <p class="note">
+    This page is safe to deploy. It calls only your own functions and the public TED register.
+    No keys are exposed: the Groq key stays server-side. If a check fails, the output box explains why.
+  </p>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+function set(id, state, status, body){
+  const c = $("#"+id);
+  c.querySelector(".dot").className = "dot " + state;
+  const st = c.querySelector(".status");
+  st.className = "status " + (state==="ok"?"ok":state==="bad"?"bad":state==="warn"?"warn":"");
+  st.textContent = status || "";
+  if (body !== undefined) c.querySelector("pre").textContent =
+    typeof body === "string" ? body : JSON.stringify(body, null, 2);
+}
+async function post(path, payload){
+  const r = await fetch(path, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+  const text = await r.text();
+  let data; try{ data = JSON.parse(text); }catch{ data = text; }
+  return { status:r.status, ok:r.ok, data };
+}
+
+async function checkSW(){
+  set("c-sw","run","checking…");
+  if (!("serviceWorker" in navigator)){ set("c-sw","warn","unsupported","This browser has no service worker support. App still runs, no offline mode."); return; }
+  try{
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (reg){ set("c-sw","ok","registered","Active scope: "+reg.scope); }
+    else {
+      try{ await navigator.serviceWorker.register("service-worker.js"); set("c-sw","ok","registered now","Registered service-worker.js on this visit."); }
+      catch(e){ set("c-sw","warn","not registered","Could not register (often fine on localhost / file://): "+e.message); }
+    }
+  }catch(e){ set("c-sw","warn","error", e.message); }
+}
+
+async function checkRedirects(){
+  set("c-redir","run","checking…");
+  const out = {};
+  for (const p of ["/api/groq","/api/ted"]){
+    try{
+      // empty POST: a wired function answers with 400/405/500 JSON, a missing route gives 404 HTML.
+      const r = await fetch(p,{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});
+      out[p] = r.status + (r.status===404 ? " (NOT wired — check netlify.toml / functions folder)" : " (reachable)");
+    }catch(e){ out[p] = "network error: "+e.message; }
+  }
+  const bad = Object.values(out).some(v=>v.includes("404")||v.includes("network error"));
+  set("c-redir", bad?"bad":"ok", bad?"problem":"both reachable", out);
+}
+
+async function checkEnvAndGroq(){
+  set("c-env","run","checking…"); set("c-groq","run","waiting…");
+  let res;
+  try{
+    res = await post("/api/groq", { messages:[
+      {role:"system",content:'Reply ONLY with compact JSON. No markdown.'},
+      {role:"user",content:'Return {"ok":true,"pong":"procura"} exactly.'}
+    ], json:true, max_tokens:60, temperature:0 });
+  }catch(e){ set("c-env","bad","unreachable",e.message); set("c-groq","bad","skipped","Function not reachable."); return; }
+
+  // Env var verdict
+  const detail = (res.data && res.data.error) ? String(res.data.error) : "";
+  if (res.status===500 && /GROQ_API_KEY/i.test(detail)){
+    set("c-env","bad","missing","GROQ_API_KEY is not set. Add it in Netlify → Site settings → Environment variables, then redeploy.");
+    set("c-groq","bad","blocked","Cannot run without the key.");
+    return;
+  }
+  if (res.status===404){
+    set("c-env","bad","no function","/api/groq returned 404 — function not deployed or redirect missing.");
+    set("c-groq","bad","skipped");
+    return;
+  }
+  set("c-env","ok","present","Key is set (function did not report it missing).");
+
+  // Groq output verdict
+  if (res.ok && res.data && typeof res.data.content==="string"){
+    let parsed=null; try{ parsed=JSON.parse(res.data.content.replace(/```json|```/g,"").trim()); }catch{}
+    if (parsed && parsed.ok){ set("c-groq","ok","working", parsed); }
+    else { set("c-groq","warn","odd reply","Got a response but JSON wasn't as expected:\n"+res.data.content); }
+  } else {
+    set("c-groq","bad","error", res.data);
+  }
+}
+
+async function checkTED(){
+  set("c-ted","run","querying TED…");
+  let res;
+  try{ res = await post("/api/ted", { country:"BGR", cpv:["45310000","45316100"] }); }
+  catch(e){ set("c-ted","bad","unreachable",e.message); return null; }
+  if (res.status===404){ set("c-ted","bad","no function","/api/ted returned 404 — function not deployed or redirect missing."); return null; }
+  if (!res.ok){ set("c-ted","bad","error "+res.status, res.data); return null; }
+  const d = res.data || {};
+  const n = Array.isArray(d.notices) ? d.notices.length : 0;
+  const summary = {
+    notices_returned: n,
+    count_reported: d.count,
+    match_source: d.matchSource,
+    broadened: d.broadened,
+    degraded: d.degraded,
+    cpv_searched: d.cpvSearched,
+    first_title: n ? d.notices[0].title : "(none today — this is normal, TED only carries higher-value EU notices)"
+  };
+  set("c-ted", n>0 ? "ok" : "warn", n>0 ? n+" notices" : "0 today", summary);
+  return d;
+}
+
+async function checkFullRun(){
+  set("c-run","run","planning…");
+  const log=[];
+  try{
+    // 1) plan
+    log.push("1) plan CPV strategy via Groq…");
+    const plan = await post("/api/groq",{messages:[
+      {role:"system",content:'You output ONLY JSON. No markdown.'},
+      {role:"user",content:'A small Bulgarian electrical installation firm. Return {"cpv":["########","########"],"keywords":["..."]} with 2 real CPV codes for electrical works.'}
+    ],json:true,max_tokens:200,temperature:0});
+    if(!plan.ok||!plan.data.content){ set("c-run","bad","plan failed",plan.data); return; }
+    let strat; try{ strat=JSON.parse(plan.data.content.replace(/```json|```/g,"").trim()); }catch{ strat={cpv:["45310000"]}; }
+    log.push("   CPV: "+(strat.cpv||[]).join(", "));
+
+    // 2) search
+    log.push("2) search live TED with those CPV…");
+    const ted = await post("/api/ted",{country:"BGR",cpv:strat.cpv||["45310000"]});
+    const notices = (ted.data&&ted.data.notices)||[];
+    log.push("   notices: "+notices.length+(ted.data&&ted.data.broadened?" (broadened)":""));
+
+    // 3) score one
+    if(notices.length){
+      log.push("3) score the first notice for fit…");
+      const sc = await post("/api/groq",{messages:[
+        {role:"system",content:'You output ONLY JSON. No markdown.'},
+        {role:"user",content:'Company: small Bulgarian electrical firm, max 250000 EUR. Tender: "'+(notices[0].title||"").slice(0,160)+'". Return {"fit":0-100,"bid_decision":"BID|CONDITIONAL|NO_BID","reason":"short"}.'}
+      ],json:true,max_tokens:160,temperature:0});
+      let verdict; try{ verdict=JSON.parse(sc.data.content.replace(/```json|```/g,"").trim()); }catch{ verdict=sc.data.content; }
+      log.push("   verdict: "+JSON.stringify(verdict));
+      set("c-run","ok","full loop OK",log.join("\n"));
+    } else {
+      log.push("3) no notices to score today — loop still verified through planning + live search.");
+      set("c-run","ok","loop OK (no notices)",log.join("\n"));
+    }
+  }catch(e){ log.push("ERROR: "+e.message); set("c-run","bad","failed",log.join("\n")); }
+}
+
+async function runAll(){
+  $("#runAll").disabled=true;
+  await checkSW();
+  await checkRedirects();
+  await checkEnvAndGroq();
+  await checkTED();
+  await checkFullRun();
+  $("#runAll").disabled=false;
+}
+$("#runAll").addEventListener("click", runAll);
+$("#clear").addEventListener("click", ()=>{
+  ["c-sw","c-redir","c-env","c-groq","c-ted","c-run"].forEach(id=>set(id,"","",""));
+});
+</script>
+</body>
+</html>

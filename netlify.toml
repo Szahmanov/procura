@@ -1,0 +1,17 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+# Friendly short paths for the two functions
+[[redirects]]
+  from = "/api/ted"
+  to = "/.netlify/functions/ted"
+  status = 200
+
+[[redirects]]
+  from = "/api/groq"
+  to = "/.netlify/functions/groq"
+  status = 200

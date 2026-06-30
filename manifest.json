@@ -1,0 +1,16 @@
+{
+  "name": "Procura — Tender Opportunity & Bid Manager",
+  "short_name": "Procura",
+  "description": "An autonomous procurement agent that finds live EU public tenders worth bidding for, tracks deadlines, and prepares bid-ready action plans.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0E1726",
+  "theme_color": "#0E1726",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
