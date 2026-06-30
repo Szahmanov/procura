@@ -506,6 +506,100 @@ const EXTRA = {
 };
 for (const L of Object.keys(EXTRA)) Object.assign(I18N[L], EXTRA[L]);
 
+/* ---- market-ready polish: onboarding, demo, executive summary, trust, errors ---- */
+const POLISH = {
+  en: {
+    ob_title:"Start in 3 steps",
+    ob_s1:"Create your company profile",
+    ob_s2:"Run a live TED search",
+    ob_s3:"Save a promising tender and open its dossier",
+    ob_load_demo:"Load demo company", ob_run_demo:"Run demo search",
+    ob_demo_next:"Demo step: save this tender to the pipeline and open its dossier.",
+    m_nodata:"Not enough data yet",
+    dash_metrics_reason:"Run a search and save tenders to start tracking these metrics.",
+    exec_title:"Procura executive summary", exec_copy:"Copy summary",
+    exec_empty:"Run a search to see a summary.",
+    exec_reviewed:"reviewed", exec_worth:"worth a serious look", exec_expire1:"expires this week",
+    exec_l_best:"Best opportunity", exec_l_blocker:"Main blocker", exec_l_next:"Next action",
+    attn_open_btn:"Open dossier", attn_issue_elig:"Eligibility not reviewed",
+    attn_issue_expire:"Deadline approaching", attn_issue_waiting:"Submitted, awaiting result",
+    attn_next_elig:"Open the dossier and generate the eligibility checklist.",
+    attn_next_expire:"Open the dossier, confirm the deadline and prepare documents.",
+    q_precision:"Search precision", prec_cpv:"Exact CPV match", prec_broadened:"Broadened", prec_country:"Country fallback",
+    q_fallback_warn:"Broadened result — verify relevance carefully.",
+    trust_title:"Why it is reliable",
+    trust_ted:"Official TED data", trust_noinvent:"No invented tenders", trust_local:"Local-only workspace",
+    trust_nologin:"No login required", trust_key:"Groq key hidden server-side", trust_free:"Free infrastructure",
+    err_groq_title:"Groq key not configured",
+    err_groq_msg:"Set GROQ_API_KEY in Netlify environment variables, then redeploy.",
+    err_ted_title:"TED register unavailable",
+    err_ted_msg:"The official TED API did not respond. Try again later or use Manual Tender Analysis.",
+    err_none_title:"No matching live TED tenders today"
+  },
+  bg: {
+    ob_title:"Започни за 3 стъпки",
+    ob_s1:"Създай фирмен профил",
+    ob_s2:"Пусни живо TED търсене",
+    ob_s3:"Запази обещаваща поръчка и отвори досието",
+    ob_load_demo:"Зареди демо фирма", ob_run_demo:"Пусни демо търсене",
+    ob_demo_next:"Демо стъпка: запази тази поръчка в потока и отвори досието ѝ.",
+    m_nodata:"Все още няма достатъчно данни",
+    dash_metrics_reason:"Пусни търсене и запази поръчки, за да започнеш да следиш тези показатели.",
+    exec_title:"Обобщение от Procura", exec_copy:"Копирай обобщението",
+    exec_empty:"Пусни търсене, за да се появи обобщение.",
+    exec_reviewed:"прегледани", exec_worth:"заслужават сериозен поглед", exec_expire1:"изтича тази седмица",
+    exec_l_best:"Най-добра възможност", exec_l_blocker:"Основна пречка", exec_l_next:"Следващ ход",
+    attn_open_btn:"Отвори досие", attn_issue_elig:"Допустимостта не е проверена",
+    attn_issue_expire:"Наближаващ срок", attn_issue_waiting:"Подадена, чака резултат",
+    attn_next_elig:"Отвори досието и генерирай чеклист за допустимост.",
+    attn_next_expire:"Отвори досието, потвърди срока и подготви документите.",
+    q_precision:"Прецизност на търсенето", prec_cpv:"Точно CPV съвпадение", prec_broadened:"Разширено", prec_country:"Само по държава",
+    q_fallback_warn:"Разширен резултат — провери релевантността внимателно.",
+    trust_title:"Защо е надеждно",
+    trust_ted:"Официални TED данни", trust_noinvent:"Без измислени поръчки", trust_local:"Локално работно пространство",
+    trust_nologin:"Без вход и регистрация", trust_key:"Groq ключът е скрит на сървъра", trust_free:"Безплатна инфраструктура",
+    err_groq_title:"Groq ключът не е настроен",
+    err_groq_msg:"Сложи GROQ_API_KEY в Netlify Environment variables и публикувай отново.",
+    err_ted_title:"Регистърът TED е недостъпен",
+    err_ted_msg:"Официалното TED API не отговори. Опитай по-късно или използвай ръчния анализ.",
+    err_none_title:"Няма подходящи живи TED поръчки днес"
+  },
+  de: {
+    ob_title:"In 3 Schritten starten",
+    ob_s1:"Unternehmensprofil anlegen",
+    ob_s2:"Live-TED-Suche starten",
+    ob_s3:"Vielversprechende Ausschreibung speichern und Dossier öffnen",
+    ob_load_demo:"Demo-Firma laden", ob_run_demo:"Demo-Suche starten",
+    ob_demo_next:"Demo-Schritt: Diese Ausschreibung in die Pipeline speichern und ihr Dossier öffnen.",
+    m_nodata:"Noch nicht genug Daten",
+    dash_metrics_reason:"Starte eine Suche und speichere Ausschreibungen, um diese Kennzahlen zu verfolgen.",
+    exec_title:"Procura-Zusammenfassung", exec_copy:"Zusammenfassung kopieren",
+    exec_empty:"Starte eine Suche, um eine Zusammenfassung zu sehen.",
+    exec_reviewed:"geprüft", exec_worth:"einen genaueren Blick wert", exec_expire1:"läuft diese Woche ab",
+    exec_l_best:"Beste Chance", exec_l_blocker:"Haupthindernis", exec_l_next:"Nächster Schritt",
+    attn_open_btn:"Dossier öffnen", attn_issue_elig:"Eignung nicht geprüft",
+    attn_issue_expire:"Frist rückt näher", attn_issue_waiting:"Eingereicht, Ergebnis ausstehend",
+    attn_next_elig:"Öffne das Dossier und erstelle die Eignungs-Checkliste.",
+    attn_next_expire:"Öffne das Dossier, bestätige die Frist und bereite die Unterlagen vor.",
+    q_precision:"Suchgenauigkeit", prec_cpv:"Genaue CPV-Übereinstimmung", prec_broadened:"Erweitert", prec_country:"Nur Land",
+    q_fallback_warn:"Erweitertes Ergebnis — Relevanz sorgfältig prüfen.",
+    trust_title:"Warum verlässlich",
+    trust_ted:"Offizielle TED-Daten", trust_noinvent:"Keine erfundenen Ausschreibungen", trust_local:"Lokaler Arbeitsbereich",
+    trust_nologin:"Kein Login nötig", trust_key:"Groq-Schlüssel serverseitig verborgen", trust_free:"Kostenlose Infrastruktur",
+    err_groq_title:"Groq-Schlüssel nicht konfiguriert",
+    err_groq_msg:"GROQ_API_KEY in den Netlify-Umgebungsvariablen setzen und neu deployen.",
+    err_ted_title:"TED-Register nicht verfügbar",
+    err_ted_msg:"Die offizielle TED-API hat nicht geantwortet. Später erneut versuchen oder die manuelle Analyse nutzen.",
+    err_none_title:"Heute keine passenden Live-TED-Ausschreibungen"
+  }
+};
+for (const L of Object.keys(POLISH)) Object.assign(I18N[L], POLISH[L]);
+
+/* ---- short tab labels for narrow screens ---- */
+Object.assign(I18N.en, { tabm_manual:"Manual", tabm_searches:"Searches", tabm_about:"Autonomous" });
+Object.assign(I18N.bg, { tabm_manual:"Ръчен анализ", tabm_searches:"Търсения", tabm_about:"Автономност" });
+Object.assign(I18N.de, { tabm_manual:"Manuell", tabm_searches:"Suchen", tabm_about:"Autonom" });
+
 if (typeof window !== "undefined") {
   window.I18N = I18N; window.LANGNAME = LANGNAME; window.COUNTRIES = COUNTRIES;
   window.CIDX = CIDX; window.STAGES = STAGES; window.ELIG_STATUS = ELIG_STATUS;
