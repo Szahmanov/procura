@@ -342,16 +342,25 @@
   ];
   let CURRENT = "dashboard";
   let DOSSIER_ID = null;
+  let DEMO_MODE = false;
 
+  const TAB_SHORT = { manual: "tabm_manual", searches: "tabm_searches", about: "tabm_about" };
+  function tabLabel(id, key) {
+    if (window.innerWidth <= 620 && TAB_SHORT[id]) return t(TAB_SHORT[id]);
+    return t(key);
+  }
   function renderTabs() {
     const counts = Store.pipelineCounts();
     const active = Object.keys(counts).reduce((a, k) => a + (["found", "shortlisted", "eligibility", "documents", "preparing"].includes(k) ? counts[k] : 0), 0);
     $("#tabs").innerHTML = TABS.map(([id, key]) => {
       let badge = "";
       if (id === "pipeline" && active) badge = `<span class="badge">${active}</span>`;
-      return `<button data-go="${id}" class="${CURRENT === id ? "on" : ""}">${esc(t(key))}${badge}</button>`;
+      return `<button data-go="${id}" class="${CURRENT === id ? "on" : ""}">${esc(tabLabel(id, key))}${badge}</button>`;
     }).join("");
     $$("#tabs button").forEach(b => b.addEventListener("click", () => go(b.dataset.go)));
+    // keep the active tab fully visible
+    const on = $("#tabs button.on");
+    if (on && on.scrollIntoView) on.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
   }
   function go(view) {
     CURRENT = view;
@@ -367,55 +376,119 @@
     const profile = Store.getActiveProfile();
     const tenders = Store.getTenders();
     const counts = Store.pipelineCounts();
+
+    // ---- first-time onboarding (no profile) ----
     if (!profile) {
-      root.innerHTML = `<h2 class="vtitle">${esc(t("dash_title"))}</h2><p class="vsub">${esc(t("dash_sub"))}</p>
-        <div class="empty"><b>${esc(t("dash_no_profile"))}</b><div class="btnrow" style="margin-top:13px">
-        <button class="btn primary" data-go="profile">${esc(t("dash_create_profile"))}</button></div></div>`;
-      wireGo(root); return;
+      root.innerHTML = `
+        <h2 class="vtitle">${esc(t("dash_title"))}</h2><p class="vsub">${esc(t("dash_sub"))}</p>
+        <div class="onboard">
+          <div class="ob-h">${esc(t("ob_title"))}</div>
+          <ol class="ob-steps">
+            <li><span>1</span>${esc(t("ob_s1"))}</li>
+            <li><span>2</span>${esc(t("ob_s2"))}</li>
+            <li><span>3</span>${esc(t("ob_s3"))}</li>
+          </ol>
+          <div class="btnrow">
+            <button class="btn primary" data-go="profile">${esc(t("dash_create_profile"))}</button>
+            <button class="btn ghost" id="demo-load">${esc(t("ob_load_demo"))}</button>
+          </div>
+        </div>
+        ${trustStrip()}`;
+      wireGo(root);
+      $("#demo-load", root).addEventListener("click", () => loadDemo(true));
+      return;
     }
+
+    const hasData = tenders.length > 0;
     const active = counts.found + counts.shortlisted + counts.eligibility + counts.documents + counts.preparing;
     const expiring = tenders.filter(x => { const d = daysLeft(x.deadline); return d != null && d >= 0 && d <= 7 && !["won", "lost", "abandoned"].includes(x.pipelineStage); }).length;
     const fits = tenders.map(x => x.fit).filter(n => n != null);
     const wins = tenders.map(x => x.winProbability).filter(n => n != null);
-    const avg = (a) => a.length ? Math.round(a.reduce((s, n) => s + n, 0) / a.length) : 0;
-    const pipelineVal = tenders.filter(x => !["found"].includes(x.pipelineStage)).reduce((s, x) => s + (num(x.value) || 0), 0);
-    const readyAvg = tenders.length ? Math.round(tenders.reduce((s, x) => s + bidReadiness(x), 0) / tenders.length) : 0;
+    const avg = (a) => a.length ? Math.round(a.reduce((s, n) => s + n, 0) / a.length) + "%" : "—";
+    const pipelineVal = tenders.filter(x => x.pipelineStage !== "found").reduce((s, x) => s + (num(x.value) || 0), 0);
+    const readyAvg = hasData ? Math.round(tenders.reduce((s, x) => s + bidReadiness(x), 0) / tenders.length) + "%" : "—";
 
     const nba = globalNextBestAction(profile, tenders);
     const attn = attentionList(tenders);
+    const exec = execSummary(profile, tenders);
 
     root.innerHTML = `
       <h2 class="vtitle">${esc(t("dash_title"))}</h2><p class="vsub">${esc(t("dash_sub"))}</p>
       <div class="nba"><div class="lab">${esc(t("nba_lab"))}</div>
         <div class="act">${esc(nba.action)}</div><div class="why">${esc(nba.why)}</div>
         ${nba.go ? `<div class="btnrow" style="margin-top:10px"><button class="btn primary sm" data-go="${nba.go}"${nba.dossier ? ` data-dossier="${nba.dossier}"` : ""}>${esc(t("open"))}</button></div>` : ""}</div>
-      ${attn.length ? `<div class="attention"><b>${esc(t("attn_title"))}</b><ul>${attn.map(a => `<li>${esc(a)}</li>`).join("")}</ul></div>`
+
+      ${exec ? `<div class="panel exec"><div class="row-between"><div class="sectit">${esc(t("exec_title"))}</div>
+        <button class="btn ghost sm" id="exec-copy">${esc(t("exec_copy"))}</button></div>
+        <div class="exec-body">${exec.html}</div></div>` : ""}
+
+      ${attn.length ? `<div class="attention"><b>${esc(t("attn_title"))}</b>
+        ${attn.map(a => `<div class="attn-row"><div class="attn-main"><div class="attn-t">${esc(a.title)}</div>
+          <div class="attn-i">${esc(a.issue)} · <span class="muted">${esc(a.next)}</span></div></div>
+          ${a.dossier ? `<button class="btn ghost sm" data-go="dossier" data-dossier="${esc(a.dossier)}">${esc(t("attn_open_btn"))}</button>` : ""}</div>`).join("")}</div>`
         : `<div class="note">${esc(t("attn_none"))}</div>`}
+
       <div class="stat-row">
         ${stat(active, t("dash_active"))}${stat(expiring, t("dash_expiring"))}${stat(counts.preparing, t("dash_preparing"))}
         ${stat(counts.submitted, t("dash_submitted"))}${stat(counts.won, t("dash_won"))}${stat(counts.lost, t("dash_lost"))}
       </div>
       <div class="stat-row">
-        ${stat(avg(fits) + "%", t("dash_avg_fit"))}${stat(avg(wins) + "%", t("dash_avg_win"))}
-        ${stat(readyAvg + "%", t("dash_readiness"))}${stat(fmtMoney(pipelineVal) || "—", t("dash_pipeline_value"))}
+        ${stat(hasData ? avg(fits) : "—", t("dash_avg_fit"))}${stat(hasData ? avg(wins) : "—", t("dash_avg_win"))}
+        ${stat(readyAvg, t("dash_readiness"))}${stat(hasData && pipelineVal ? fmtMoney(pipelineVal) : "—", t("dash_pipeline_value"))}
       </div>
+      ${!hasData ? `<div class="note">${esc(t("m_nodata"))}. ${esc(t("dash_metrics_reason"))}</div>` : ""}
+
       <div class="btnrow"><button class="btn primary" data-go="search">${esc(t("dash_run_search"))}</button>
         <button class="btn ghost" data-go="pipeline">${esc(t("nav_pipeline"))}</button></div>`;
     wireGo(root);
+    if ($("#exec-copy", root)) $("#exec-copy", root).addEventListener("click", () => { navigator.clipboard.writeText(exec.text).then(() => toast(t("saved"))); });
   }
   function stat(n, l) { return `<div class="stat"><div class="n">${esc(n)}</div><div class="l">${esc(l)}</div></div>`; }
 
+  function trustStrip() {
+    const items = ["trust_ted", "trust_noinvent", "trust_local", "trust_nologin", "trust_key", "trust_free"];
+    return `<div class="trust"><div class="trust-h">${esc(t("trust_title"))}</div><div class="chips">${items.map(k => `<span class="chip ok">${esc(t(k))}</span>`).join("")}</div></div>`;
+  }
+
+  // demo: seed Plovdiv Electro, optionally jump to search and run it
+  function loadDemo(run) {
+    let p = Store.getProfiles().find(x => x.name === SAMPLES[0].name);
+    if (!p) { p = Object.assign(Store.blankProfile(), SAMPLES[0]); Store.saveProfile(p); }
+    Store.setActiveProfile(p.id);
+    toast(t("saved"));
+    if (run) { DEMO_MODE = true; go("search"); setTimeout(() => { const b = $("#s-run"); if (b) runSearch(Store.getActiveProfile()); }, 80); }
+    else go("dashboard");
+  }
+
   function attentionList(tenders) {
     const out = [];
-    const exp = tenders.filter(x => { const d = daysLeft(x.deadline); return d != null && d >= 0 && d <= 5 && !["won", "lost", "abandoned", "submitted"].includes(x.pipelineStage); }).length;
-    if (exp) out.push(t("attn_expire", exp));
-    const elig = tenders.filter(x => x.pipelineStage === "found" && !(x.eligibilityChecklist || []).length).length;
-    if (elig) out.push(t("attn_elig", elig));
-    const waiting = tenders.filter(x => x.pipelineStage === "waiting" || x.pipelineStage === "submitted").length;
-    if (waiting) out.push(t("attn_waiting", waiting));
-    const stale = Store.getSearches().filter(s => { const d = daysSince(s.lastRun); return d != null && d >= 7; }).length;
-    if (stale) out.push(t("attn_stale", stale));
-    return out;
+    tenders.filter(x => { const d = daysLeft(x.deadline); return d != null && d >= 0 && d <= 5 && !["won", "lost", "abandoned", "submitted"].includes(x.pipelineStage); })
+      .sort((a, b) => daysLeft(a.deadline) - daysLeft(b.deadline)).slice(0, 3)
+      .forEach(x => out.push({ title: x.title || "—", issue: t("attn_issue_expire") + " · " + t("days_left", daysLeft(x.deadline)), next: t("attn_next_expire"), dossier: x.id }));
+    tenders.filter(x => x.pipelineStage !== "found" && !(x.eligibilityChecklist || []).length).slice(0, 3)
+      .forEach(x => out.push({ title: x.title || "—", issue: t("attn_issue_elig"), next: t("attn_next_elig"), dossier: x.id }));
+    tenders.filter(x => x.pipelineStage === "submitted" || x.pipelineStage === "waiting").slice(0, 2)
+      .forEach(x => out.push({ title: x.title || "—", issue: t("attn_issue_waiting"), next: t("pipe_open"), dossier: x.id }));
+    return out.slice(0, 5);
+  }
+
+  // executive summary for the dashboard + clipboard
+  function execSummary(profile, tenders) {
+    if (!tenders.length) return null;
+    const worth = tenders.filter(x => x.bidDecision === "bid" || x.bidDecision === "conditional");
+    const expiring = tenders.filter(x => { const d = daysLeft(x.deadline); return d != null && d >= 0 && d <= 7; });
+    const best = tenders.slice().sort((a, b) => (b.winProbability || 0) - (a.winProbability || 0) || (b.fit || 0) - (a.fit || 0))[0];
+    const blocker = best && best.biggestRisk ? best.biggestRisk : (!profile.publicRefs ? t("f_publicRefs") + ": " + t("no") : "");
+    const nba = globalNextBestAction(profile, tenders);
+    const lines = [];
+    lines.push(t("exec_reviewed") + ": " + tenders.length);
+    lines.push(worth.length + " " + t("exec_worth"));
+    if (expiring.length) lines.push(expiring.length + " " + t("exec_expire1"));
+    if (best) lines.push(t("exec_l_best") + ": " + (best.title || "—"));
+    if (blocker) lines.push(t("exec_l_blocker") + ": " + blocker);
+    lines.push(t("exec_l_next") + ": " + nba.action);
+    const html = `<ul style="margin:0;padding-left:18px">${lines.map(l => `<li>${esc(l)}</li>`).join("")}</ul>`;
+    return { html, text: "Procura — " + (profile.name || "") + "\n" + lines.join("\n") };
   }
   function globalNextBestAction(profile, tenders) {
     // priority: expiring shortlisted -> eligibility missing -> vault gaps -> stale search -> run search
@@ -616,8 +689,11 @@
       paintResults(LAST_RESULTS);
       renderTabs();
     } catch (e) {
-      $("#s-results").innerHTML = `<div class="err"><b>${esc(t("loading"))}</b> ${esc(e.message || String(e))}
-        <br><span style="color:#c9b08f">GROQ_API_KEY → Netlify → Environment variables.</span></div>`;
+      const msg = (e && e.message) ? e.message : String(e);
+      let title = t("loading"), body = msg;
+      if (/GROQ_API_KEY|invalid_api_key|groq/i.test(msg)) { title = t("err_groq_title"); body = t("err_groq_msg"); }
+      else if (/ted|404|fetch|network/i.test(msg)) { title = t("err_ted_title"); body = t("err_ted_msg"); }
+      $("#s-results").innerHTML = `<div class="err"><b>${esc(title)}</b><br>${esc(body)}</div>`;
     } finally { btn.disabled = false; btn.textContent = t("srch_run_now"); }
   }
 
@@ -631,21 +707,26 @@
 
   function paintResults(R) {
     const { pool, plan, country, ted } = R;
+    // autonomous work completed — proves it acted, not chatted
+    const work = (t("work_items") || []);
+    const precision = ted.matchSource === "country" ? (ted.broadened ? t("prec_broadened") : t("prec_country")) : t("prec_cpv");
+    const workPanel = `<div class="panel work"><div class="sectit">${esc(t("work_title"))}</div>
+      <ul class="worklist">${work.map(w => `<li>${esc(w)}</li>`).join("")}</ul></div>`;
     // search quality + cpv strategy
     const cpvChips = (plan.cpv || []).map(c => `<div class="crow"><div class="cmain"><div class="cname mono">${esc(c.code)}</div>${c.why ? `<div class="cwhy">${esc(c.why)}</div>` : ""}</div></div>`).join("");
-    $("#s-quality").innerHTML = `
+    $("#s-quality").innerHTML = workPanel + `
       <details class="acc"><summary>${esc(t("strategy_title"))}</summary><div class="body">${cpvChips || "—"}</div></details>
       <details class="acc"><summary>${esc(t("quality_title"))}</summary><div class="body">
         <div>${esc(t("q_country"))}: <b>${esc(countryName(country))}</b></div>
         <div>${esc(t("q_cpv"))}: <span class="mono">${esc((ted.cpvSearched || []).join(", ") || "—")}</span></div>
-        <div>${esc(t("q_source"))}: <b>${esc(ted.matchSource === "country" ? t("src_country") : t("src_cpv"))}</b></div>
+        <div>${esc(t("q_precision"))}: <b>${esc(precision)}</b></div>
         <div>${esc(t("q_fetched"))}: ${ted.count || pool.length} · ${esc(t("q_scored"))}: ${pool.length} · ${esc(t("q_recommended"))}: ${pool.filter(n => n.bidDecision === "bid").length}</div>
         ${ted.broadened ? `<div class="note">${esc(t("q_broadened"))}</div>` : ""}
       </div></details>`;
 
     const order = { bid: 0, conditional: 1, nobid: 2 };
     pool.sort((a, b) => order[a.bidDecision] - order[b.bidDecision] || b.win - a.win || b.fit - a.fit);
-    $("#s-results").innerHTML = pool.map(n => resultCard(n)).join("");
+    $("#s-results").innerHTML = pool.map((n, i) => resultCard(n, DEMO_MODE && i === 0)).join("");
     $$("#s-results [data-save]").forEach(b => b.addEventListener("click", () => {
       const n = pool.find(x => x.id === b.dataset.save);
       const tn = Store.tenderFromResult(n, Store.getActiveProfileId(), "ted");
@@ -653,19 +734,23 @@
       Store.saveTender(tn); toast(t("saved_tender")); renderTabs();
       b.textContent = "✓ " + t("saved"); b.disabled = true;
     }));
+    DEMO_MODE = false;
   }
 
   function decBadge(d) { return `<span class="badge-d b-${d === "bid" ? "bid" : d === "conditional" ? "conditional" : "nobid"}">${esc(t("dec_" + (d === "nobid" ? "nobid" : d)))}</span>`; }
-  function resultCard(n) {
+  function resultCard(n, demoBest) {
     const dl = n.daysLeft;
     const u = urgency(dl);
     const saved = Store.isSaved(n.id);
-    return `<article class="card lstripe ${n.bidDecision}">
+    const fallback = n.matchSource === "country";
+    return `<article class="card lstripe ${n.bidDecision}${demoBest ? " demo-best" : ""}">
+      ${demoBest ? `<div class="demo-flag">${esc(t("ob_demo_next"))}</div>` : ""}
       <div class="stamp ${n.bidDecision}">${esc(t("dec_" + (n.bidDecision === "nobid" ? "nobid" : n.bidDecision)))}</div>
       <div class="mono muted" style="font-size:11px">${esc(n.id)}</div>
       <div style="font-family:'Spectral',serif;font-size:17px;font-weight:600;line-height:1.3;margin:3px 0 6px;padding-right:96px">
         <a href="${esc(n.officialLink)}" target="_blank" rel="noopener">${esc(n.title)}</a></div>
       <div class="muted" style="font-size:12.5px;margin-bottom:8px">${esc(n.buyer || "")} · ${esc(n.country)}</div>
+      ${fallback ? `<div class="note warn-note">${esc(t("q_fallback_warn"))}</div>` : ""}
       ${(n.cpv || []).length ? `<div class="chips" style="margin-bottom:8px">${n.cpv.map(c => `<span class="chip">${esc(c)}</span>`).join("")}</div>` : ""}
       <div style="margin-bottom:8px"><span class="pill ${u.cls}">${esc(t(u.key))}</span>
         ${dl != null && dl >= 0 ? `<span class="pill">${esc(t("days_left", dl))}</span>` : ""}
@@ -1055,14 +1140,19 @@
 
   /* ============================================================ VIEW: about */
   function renderAbout(root) {
+    const loopLabels = [t("strategy_title"), "TED", t("urg_expired"), t("m_fit"), t("m_win"), t("dos_log"), t("dec_decision"), t("nav_pipeline"), t("mem_title")];
     root.innerHTML = `<h2 class="vtitle">${esc(t("about_title"))}</h2>
       <div class="panel">
         <p>${esc(t("about_p1"))}</p>
         <p>${esc(t("about_p2"))}</p>
         <p>${esc(t("about_p3"))}</p>
       </div>
+      <div class="panel"><div class="sectit">${esc(t("about_title"))}</div>
+        <div class="loop">${loopLabels.map((l, i) => `<div class="loop-step">${esc(l)}</div>${i < loopLabels.length - 1 ? `<div class="loop-arrow">↓</div>` : ""}`).join("")}</div>
+      </div>
       <div class="panel"><div class="sectit">${esc(t("work_title"))}</div>
-        <ul style="margin:0;padding-left:18px;color:var(--paper-dim);font-size:13.5px">${(t("work_items") || []).map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>`;
+        <ul style="margin:0;padding-left:18px;color:var(--paper-dim);font-size:13.5px">${(t("work_items") || []).map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>
+      ${trustStrip()}`;
   }
 
   /* ============================================================ win/loss modal (inline) */
